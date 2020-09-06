@@ -82,6 +82,7 @@ data.powerStatList = {
 	{ stat="TotalDPS", label="Total DPS" },
 	{ stat="WithImpaleDPS", label="Impale + Total DPS" },
 	{ stat="AverageDamage", label="Average Hit" },
+	{ stat="Speed", label="Attack/Cast Speed" },
 	{ stat="BleedDPS", label="Bleed DPS" },
 	{ stat="IgniteDPS", label="Ignite DPS" },
 	{ stat="PoisonDPS", label="Poison DPS" },
@@ -108,6 +109,7 @@ data.powerStatList = {
 	{ stat="LightningTakenDotMult", label="Taken Lightning dmg", transform=function(value) return 1-value end },
 	{ stat="ChaosTakenHitMult", label="Taken Chaos dmg", transform=function(value) return 1-value end },
 	{ stat="CritChance", label="Crit Chance" },
+	{ stat="CritMultiplier", label="Crit Multiplier" },
 	{ stat="BleedChance", label="Bleed Chance" },
 	{ stat="FreezeChance", label="Freeze Chance" },
 	{ stat="IgniteChance", label="Ignite Chance" },
@@ -210,7 +212,7 @@ data.specialBaseTags = {
 data.misc = { -- magic numbers
 	ServerTickRate = 30,
 	TemporalChainsEffectCap = 75,
-	PhysicalDamageReductionCap = 90,
+	DamageReductionCap = 90,
 	MaxResistCap = 90,
 	EvadeChanceCap = 95,
 	DodgeChanceCap = 75,
@@ -230,6 +232,7 @@ data.misc = { -- magic numbers
 	TrapTriggerRadiusBase = 10,
 	MineDetonationRadiusBase = 60,
 	MineAuraRadiusBase = 35,
+	PurposefulHarbingerMaxBuffPercent = 40,
 }
 
 ---------------------------
@@ -272,6 +275,44 @@ for _, targetVersion in ipairs(targetVersionList) do
 	-- Cluster jewel data
 	if targetVersion ~= "2_6" then	
 		verData.clusterJewels = dataModule("ClusterJewels")
+
+		-- Create a quick lookup cache from cluster jewel skill to the notables which use that skill
+		---@type table<string, table<string>>
+		local clusterSkillToNotables = { }
+		for notableKey, notableInfo in pairs(verData.itemMods.JewelCluster) do
+			-- Translate the notable key to its name
+			local notableName = notableInfo[1] and notableInfo[1]:match("1 Added Passive Skill is (.*)")
+			if notableName then
+				for weightIndex, clusterSkill in pairs(notableInfo.weightKey) do
+					if notableInfo.weightVal[weightIndex] > 0 then
+						if not clusterSkillToNotables[clusterSkill] then
+							clusterSkillToNotables[clusterSkill] = { }
+						end
+						table.insert(clusterSkillToNotables[clusterSkill], notableName)
+					end
+				end
+			end
+		end
+
+		-- Create easy lookup from cluster node name -> cluster jewel size and types
+		verData.clusterJewelInfoForNotable = { }
+		for size, jewel in pairs(verData.clusterJewels.jewels) do
+			for skill, skillInfo in pairs(jewel.skills) do
+				local notables = clusterSkillToNotables[skill]
+				if notables then
+					for _, notableKey in ipairs(notables) do
+						if not verData.clusterJewelInfoForNotable[notableKey] then
+							verData.clusterJewelInfoForNotable[notableKey] = { }
+							verData.clusterJewelInfoForNotable[notableKey].jewelTypes = { }
+							verData.clusterJewelInfoForNotable[notableKey].size = { }
+						end
+						local curJewelInfo = verData.clusterJewelInfoForNotable[notableKey]
+						curJewelInfo.size[size] = true
+						table.insert(curJewelInfo.jewelTypes, skill)
+					end
+				end
+			end
+		end
 	end
 
 	-- Load skills
@@ -406,4 +447,5 @@ data.uniques = { }
 for _, type in pairs(itemTypes) do
 	data.uniques[type] = LoadModule("Data/Uniques/"..type)
 end
+LoadModule("Data/Generated")
 LoadModule("Data/New")
